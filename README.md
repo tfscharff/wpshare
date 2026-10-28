@@ -1,7 +1,6 @@
 # Sitemap (wpshare)
 
-A WordPress plugin for sharing responsibility for a site. Built for the Wallace Library site
-(library.wheatoncollege.edu), usable by any site.
+A WordPress plugin for sharing responsibility for a site.
 
 - **Sitemap screen** (wp-admin → Sitemap): every page except those in the trash, drafts included,
   as a tree. Each page has one owner, and a **Mark reviewed** button records who checked it and when.
