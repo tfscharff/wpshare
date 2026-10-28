@@ -62,9 +62,13 @@ below with the user, then builds 1.0.0.
   inline scripts via `wp_json_encode()`, ES5-style JS.
 - Store settings in one option, with every write going through one sanitize function.
 - Capability: `edit_pages`, same as the sister plugins, unless the user says otherwise.
-- A portable PHP CLI is at `C:\Users\thoma\bin\php\php.exe`. Run `php -l` on every change.
-- Test with a stub harness that mocks the WordPress functions (`php tests/run.php`), as in
-  `wpfloors\tests`. Include junk input.
+- A portable PHP CLI is at `C:\Users\thoma\bin\php\php.exe`. Run `php -l` on every change:
+  `C:\Users\thoma\bin\php\php.exe -l wpshare.php`
+- Test with a stub harness that mocks the WordPress functions, as in `wpfloors\tests`: stubs in
+  `tests/run.php`, cases in `tests/cases.php`, run with
+  `C:\Users\thoma\bin\php\php.exe tests/run.php`. Include junk input.
+- The core sitemap hooks the stopgap uses are `wp_sitemaps_post_types` and
+  `wp_sitemaps_add_provider`; per-page exclusion would go through `wp_sitemaps_posts_query_args`.
 - After the user installs it, check the live `/wp-sitemap.xml`, its sub-sitemaps and robots.txt
   with a cache-busting query (`?cb=<random>`): Cloudflare caches aggressively.
 - The site must meet WCAG 2.1 AA, and that includes any admin screen.
@@ -78,9 +82,16 @@ without asking; only check in if the bump category (patch, minor, major) is ambi
    usable build; earlier work-in-progress builds are 0.x and released with `--prerelease`.
 2. Add a dated line to `## Changelog` in `README.md`: `- **X.Y.Z** (YYYY-MM-DD) — what changed.`
 3. Commit (concise, imperative mood) and push to `main`.
-4. Run `bin/release.sh X.Y.Z "notes"` (add `--prerelease` for unfinished builds). It checks the
-   version and changelog, builds `build/wpshare-X.Y.Z.zip` with a top-level `wpshare/` folder,
-   creates the GitHub release, and copies the zip to `C:\Users\thoma\Downloads`.
+4. Run `bin/release.sh X.Y.Z "notes"` (add `--prerelease` for unfinished builds) from Git Bash.
+   It checks the version and changelog, builds `build/wpshare-X.Y.Z.zip` with a top-level
+   `wpshare/` folder, creates the GitHub release, and copies the zip to `C:\Users\thoma\Downloads`.
+   It greps for exact strings, so keep these forms:
+   - `define( 'WPSHARE_VERSION', 'X.Y.Z' );` (spacing included);
+   - the changelog line starting `- **X.Y.Z**`;
+   - a clean, pushed working tree.
+
+   The zip holds only `wpshare.php`, `README.md`, `LICENSE` and `assets/` if it exists (`tests/`
+   is left out). Any other file the plugin needs means editing `release.sh` too.
 5. The user installs it at Plugins → Add New → Upload Plugin → Replace current.
 
 ## Site rules that apply here
