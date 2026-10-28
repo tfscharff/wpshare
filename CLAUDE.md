@@ -19,8 +19,9 @@ REST namespace and CSS classes. Never use an `mcw` prefix, even though older sis
 
 ## Status
 
-1.0.0 (2026-10-28). Not yet confirmed installed. After it is: check the live sitemap (see Build and
-verify), remove the theme stopgap, and tell the wpa11y session the surface is live.
+1.0.0 (2026-10-28), installed live the same day. The theme stopgap filters are removed, so
+wpshare alone now shapes `/wp-sitemap.xml` (verified: only the page sitemap; users and foyer
+sitemaps 404). wpa11y 1.5.0 calls `wpshare_notify` when its email setting is "each page's owner".
 
 ## Background the user has already given
 
@@ -37,9 +38,8 @@ verify), remove the theme stopgap, and tell the wpa11y session the surface is li
   - `wheatonlibrary_sitemap_post_types` on `wp_sitemaps_post_types`, which drops the three foyer
     types;
   - `wheatonlibrary_sitemap_providers` on `wp_sitemaps_add_provider`, which drops `users`.
-  Verified live: the index lists only `wp-sitemap-posts-page-1.xml`, and the users sitemap is 404.
-  **When wpshare 1.0.0 is installed and does the same job, remove those two filters from the theme.**
-  The theme live-syncs to production: lint the edited file with `php -l` before saving it there.
+  Both were removed on 2026-10-28 once wpshare 1.0.0 was installed. Don't add sitemap code back
+  to the theme.
 - The user decided on a plugin rather than an off-the-shelf one (Yoast, Rank Math): those bring a
   lot of SEO machinery the site would never use.
 - For a human-readable sitemap page, core's **Page List** block already exists. Ask before
@@ -112,7 +112,7 @@ without asking; only check in if the bump category (patch, minor, major) is ambi
 
 - Edit this repo locally, then commit and push. Never edit it through the GitHub API.
 - The theme folder `Documents\wheatonlibrary` live-syncs to production. Don't put anything for this
-  plugin there (the one exception is removing the stopgap filters above).
+  plugin there.
 - Never import `mysql.sql` anywhere. Never enter passwords; the user logs in.
 - Keep designs simple and explainable. Do exactly what was asked, and raise any conflict instead of
   redesigning. Be concise with the user.
