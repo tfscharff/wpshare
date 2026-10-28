@@ -4,10 +4,11 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What this is
 
-**wpshare**: a WordPress plugin (not yet written) for the Wallace Library site
-(library.wheatoncollege.edu, WP Engine behind Cloudflare), usable by any site. It controls what the
-site shares with search engines through its sitemap, replacing a stopgap in the theme (see below).
-Repo: https://github.com/tfscharff/wpshare (public, GPLv2, like the sibling plugins).
+**wpshare**, shown as **Sitemap**: a single-file WordPress plugin (`wpshare.php`) for sharing
+responsibility for a site. Built for the Wallace Library site (library.wheatoncollege.edu, WP Engine
+behind Cloudflare), usable by any site. It also controls the public XML sitemap, replacing a stopgap
+in the theme (see below). Repo: https://github.com/tfscharff/wpshare (public, GPLv2, like the
+sibling plugins).
 
 The sibling plugins are `wphours`, `wprooms`, `wpmeet`, `wpfloors` and `wpa11y`, all in
 `C:\Users\thoma\Documents\`. Copy their conventions, especially `wpfloors\CLAUDE.md` (single-file
@@ -18,8 +19,8 @@ REST namespace and CSS classes. Never use an `mcw` prefix, even though older sis
 
 ## Status
 
-2026-10-28: scaffold only. No plugin code yet. The handoff session settles the open questions
-below with the user, then builds 1.0.0.
+1.0.0 (2026-10-28). Not yet confirmed installed. After it is: check the live sitemap (see Build and
+verify), remove the theme stopgap, and tell the wpa11y session the surface is live.
 
 ## Background the user has already given
 
@@ -44,16 +45,29 @@ below with the user, then builds 1.0.0.
 - For a human-readable sitemap page, core's **Page List** block already exists. Ask before
   building an HTML sitemap into the plugin.
 
-## Open questions to settle first (do not assume answers)
+## Agreed design (settled with the user 2026-10-28)
 
-1. **Scope.** Confirm wpshare is the sitemap plugin, and what "share" covers: only the XML
-   sitemap, or also robots.txt, per-page "hide from search" (noindex), social-share previews
-   (Open Graph), or an HTML sitemap shortcode?
-2. **Settings or fixed rules?** A wp-admin screen where staff choose which post types and pages
-   are listed, or rules in code? Prefer the simplest thing the user can explain to a successor.
-3. **Per-page exclusions.** Are there pages that should stay out of the sitemap? Note the site has
-   a `prt-edits` page the user has said to leave alone; ask whether it should be listed.
-4. **Plugin display name** for the header and the wp-admin menu.
+- **Purpose:** tools for sharing responsibility for the site. The display name is **Sitemap**
+  (the user dropped "Collaborate"). Code names stay `wpshare`.
+- **Sitemap screen** (wp-admin → Sitemap, slug `wpshare`): every page except trash, **including
+  drafts, pending, scheduled and private**, as a tree, for staff to work on. These must never
+  reach the public XML sitemap. Server-rendered forms posting to `admin-post.php`, with no JS.
+- **One owner per page** (user's choice; no inheritance from parents), in post meta
+  `_wpshare_owner`. Owners are users with `edit_pages`. "Mark reviewed" stores
+  `_wpshare_reviewed` (date) and `_wpshare_reviewed_by`.
+- **Reminders:** the user sets the dates in Settings. `MM-DD` repeats yearly, `YYYY-MM-DD` happens
+  once. 02-29 is refused. An hourly WP-Cron `wpshare_check` sends one email per owner, and catches
+  up on missed days through `wpshare_state`. Unowned pages go to the fallback address, or nowhere.
+- **wpa11y surface:** `do_action( 'wpshare_notify', $post_id, [source, subject, message, url] )`
+  emails the page's owner, or the fallback. wpshare doesn't deduplicate; the caller decides when
+  to send. Documented in README. Keep this contract stable: wpa11y depends on it.
+- **Public XML sitemap:** settings for which public post types are listed (default: only `page`),
+  and the users sitemap off. That matches the stopgap.
+- Every page is listed. `prt-edits` isn't excluded.
+- Options: `wpshare` (settings, written only through `wpshare_sanitize()`), `wpshare_state`, and
+  `wpshare_log` (the last 50 emails, shown in Settings).
+- Not built, so ask first: robots.txt, noindex, Open Graph, an HTML sitemap, per-page
+  XML exclusions.
 
 ## Build and verify
 
