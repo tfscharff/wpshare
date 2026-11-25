@@ -32,6 +32,11 @@ ok( '' === wpshare_sanitize( array( 'fallback' => 'not an email' ) )['fallback']
 ok( false === wpshare_sanitize( array( 'users' => array( 1 ) ) )['users'] && false === wpshare_sanitize( array( 'users' => '0' ) )['users'], 'users junk is off' );
 ok( 'page' === wpshare_sanitize( array( 'post_types' => 'page' ) )['post_types'][0], 'single post type string accepted' );
 ok( 2000 === strlen( wpshare_sanitize( array( 'message' => str_repeat( 'a', 3000 ) ) )['message'] ), 'message capped' );
+$s = wpshare_sanitize( array( 'message' => array( 'x' ), 'fallback' => array( 'web@example.edu' ), 'dates' => array( 'k' => array( '01-15' ) ) ) );
+ok( '' === $s['message'] && '' === $s['fallback'] && array() === $s['dates'], 'array junk in scalar fields is dropped' );
+$GLOBALS['wps_options'][ WPSHARE_OPTION ] = 'junk';
+ok( wpshare_defaults() === wpshare_settings(), 'stored non-array option reads as defaults' );
+$GLOBALS['wps_options'] = array();
 
 /* ---------------- dates ---------------- */
 
@@ -65,6 +70,16 @@ wpshare_save( array() );
 ok( array() === wpshare_sitemap_post_types( $all ), 'nothing chosen: no post types' );
 $GLOBALS['wps_options'][ WPSHARE_OPTION ] = array( 'post_types' => array( 'gone_type' ), 'users' => 'x' );
 ok( array() === wpshare_sitemap_post_types( $all ), 'stored junk is sanitized on read' );
+
+// Hooks: the contract wpa11y and core rely on. Core's posts sitemap only queries published posts;
+// wpshare must not widen that query, so it adds no wp_sitemaps_posts_query_args filter.
+$hooks = $GLOBALS['wps_hooks'];
+ok( array( array( 'wpshare_notify', 10, 2 ) ) === $hooks['wpshare_notify'], 'wpshare_notify action takes ($post_id, $args)' );
+ok( array( array( 'wpshare_sitemap_post_types', 10, 1 ) ) === $hooks['wp_sitemaps_post_types'] && array( array( 'wpshare_sitemap_provider', 10, 2 ) ) === $hooks['wp_sitemaps_add_provider'], 'sitemap filters hooked' );
+ok( ! isset( $hooks['wp_sitemaps_posts_query_args'] ), 'sitemap post query left to core (published only)' );
+ok( 'wpshare_check' === $hooks['wpshare_check'][0][0], 'cron check hooked' );
+ok( 'wpshare_handle_sitemap' === $hooks['admin_post_wpshare_sitemap'][0][0] && 'wpshare_handle_settings' === $hooks['admin_post_wpshare_settings'][0][0] && 'wpshare_handle_send' === $hooks['admin_post_wpshare_send'][0][0], 'admin-post handlers hooked' );
+ok( array() === array_filter( array_keys( $hooks ), function ( $k ) { return 0 === strpos( $k, 'admin_post_nopriv_' ); } ), 'no handler open to logged-out visitors' );
 
 /* ---------------- tree ---------------- */
 
@@ -145,6 +160,7 @@ ok( 'ana@example.edu' === $m[0]['to'] && '[Wallace & Library] Please check your 
 ok( false !== strpos( $m[0]['body'], "Your pages (1):\n\n- Home (Published, never reviewed)\n  https://example.test/wp-admin/post.php?post=1&action=edit" ), 'reminder lists the page with its edit link' );
 ok( false !== strpos( $m[0]['body'], 'Please check that these pages' ) && false !== strpos( $m[0]['body'], 'admin.php?page=wpshare&filter=mine' ), 'default message and My pages link' );
 ok( false !== strpos( $m[1]['body'], 'Hours (Draft, last reviewed 2026-10-28)' ), 'drafts included, review date shown' );
+ok( 'ben@example.edu' === $m[1]['to'] && 1 === count( array_filter( $m, function ( $x ) { return 'ben@example.edu' === $x['to']; } ) ) && false !== strpos( $m[1]['body'], 'Your pages (2):' ) && strpos( $m[1]['body'], '- Hours' ) < strpos( $m[1]['body'], '- Deep' ), 'owner of two pages gets one email listing both, in tree order' );
 ok( 2 === count( get_option( WPSHARE_LOG ) ) && 'reminder' === get_option( WPSHARE_LOG )[0]['kind'], 'reminders logged' );
 
 $GLOBALS['wps_mail'] = array();
@@ -170,6 +186,17 @@ ok( 0 === wpshare_check( '2026-11-06' ) && 0 === wpshare_check( '2026-11-01' ), 
 ok( 2 === wpshare_check( '2027-10-28' ), 'yearly date fires next year' );
 $GLOBALS['wps_options'][ WPSHARE_STATE ] = 'junk';
 ok( 0 === wpshare_check( '2027-12-01' ) && '2027-12-01' === get_option( WPSHARE_STATE )['checked'], 'junk state recovers' );
+$GLOBALS['wps_mail'] = array();
+wpshare_save( array( 'dates' => "12-05\n12-10" ) );
+ok( 2 === wpshare_check( '2027-12-15' ) && 2 === count( $GLOBALS['wps_mail'] ), 'two missed dates: one email per owner, not one per date' );
+wpshare_save( array( 'dates' => '12-20' ) );
+$GLOBALS['wps_mail_ok'] = false;
+ok( 0 === wpshare_check( '2027-12-20' ) && '2027-12-20' === get_option( WPSHARE_STATE )['checked'], 'failed send still records the day' );
+$GLOBALS['wps_mail_ok'] = true;
+$sent = count( $GLOBALS['wps_mail'] );
+ok( 0 === wpshare_check( '2027-12-20' ) && $sent === count( $GLOBALS['wps_mail'] ), 'failed day not retried' );
+unset( $GLOBALS['wps_options'][ WPSHARE_STATE ] );
+ok( 0 === wpshare_check( '2027-12-21' ), 'first run ever: a date before today is not caught up' );
 
 /* ---------------- notices (the wpa11y surface) ---------------- */
 
@@ -195,6 +222,21 @@ wpshare_notify( 1, array( 'url' => 'javascript:alert(1)', 'subject' => array( 'x
 $m = end( $GLOBALS['wps_mail'] );
 ok( false === strpos( $m['body'], 'javascript' ) && false === strpos( $m['body'], 'Details:' ), 'non-http url dropped' );
 
+ok( true === wpshare_notify( 9 ) && 'web@example.edu' === end( $GLOBALS['wps_mail'] )['to'], 'owner deleted: notice goes to fallback' );
+$GLOBALS['wps_meta'][10][ WPSHARE_OWNER_META ] = 20;
+ok( true === wpshare_notify( 10 ) && 'web@example.edu' === end( $GLOBALS['wps_mail'] )['to'], 'non-page with owner meta still goes to fallback' );
+ok( true === wpshare_notify( 3 ) && 'ben@example.edu' === end( $GLOBALS['wps_mail'] )['to'], 'draft page: notice to its owner' );
+wpshare_notify( 1, array( 'subject' => str_repeat( 's', 300 ), 'message' => str_repeat( 'm', 6000 ) ) );
+$m = end( $GLOBALS['wps_mail'] );
+ok( '[Wallace & Library] ' . str_repeat( 's', 200 ) === $m['subject'] && false !== strpos( $m['body'], "\n" . str_repeat( 'm', 5000 ) . "\n" ), 'notice subject and message clipped' );
+$GLOBALS['wps_mail_ok'] = false;
+ok( false === wpshare_notify( 1, array( 'source' => 'wpa11y' ) ) && 'ana@example.edu' === get_option( WPSHARE_LOG )[0]['to'] && false === get_option( WPSHARE_LOG )[0]['ok'], 'failed notice returns false and is logged as failed' );
+$GLOBALS['wps_mail_ok'] = true;
+
+$GLOBALS['wps_options'][ WPSHARE_LOG ] = 'junk';
+wpshare_log( 'notice', 't', 1, 'a@b.cc', 's', true );
+ok( 1 === count( get_option( WPSHARE_LOG ) ), 'junk log option starts afresh' );
+
 for ( $i = 0; $i < 60; $i++ ) { wpshare_log( 'notice', 't', 1, 'a@b.cc', 's' . $i, true ); }
 ok( WPSHARE_LOG_MAX === count( get_option( WPSHARE_LOG ) ) && 's59' === get_option( WPSHARE_LOG )[0]['subject'], 'log capped, newest first' );
 
@@ -213,6 +255,60 @@ ok( false !== strpos( wpshare_render_settings( wpshare_defaults(), array(), arra
 ok( false !== strpos( wpshare_render_settings( wpshare_defaults(), array(), array(), '2026-10-28' ), 'No reminders are scheduled.' ), 'no dates' );
 ok( false !== strpos( wpshare_render_settings( wpshare_defaults(), array(), array(), '2026-10-28' ), 'No emails sent yet.' ), 'empty log' );
 ok( false !== strpos( wpshare_render_settings( wpshare_defaults(), array(), array( array( 'kind' => 'notice', 'to' => '', 'ok' => false ), 'junk' ), '2026-10-28' ), 'Not sent: no owner or fallback address' ), 'unsent row explained; junk rows skipped' );
+
+$s = array( 'post_types' => array(), 'users' => false, 'dates' => array(), 'message' => '</textarea><script>x</script>', 'fallback' => '"><script>y</script>' );
+$h = wpshare_render_settings( $s, array( 'page' => '<i>Pages</i>' ), array( array( 'kind' => 'notice', 'source' => '<u>src</u>', 'post' => 14, 'to' => '<b>to</b>', 'subject' => 's', 'ok' => true, 'at' => '<s>' ) ), '2026-10-28' );
+ok( false === strpos( $h, '<script>' ) && false === strpos( $h, '<i>Pages' ) && false === strpos( $h, '<u>' ) && false === strpos( $h, '<b>to' ) && false === strpos( $h, '<s>' ), 'settings values, type labels and log fields escaped' );
+ok( false !== strpos( $h, 'Evil &amp; &quot;quoted&quot;</a>' ), 'log page title escaped' );
+
+/* ---------------- admin-post handlers: capability, then nonce, then action ---------------- */
+
+function wps_run( $fn ) {
+	try { $fn(); return 'returned'; } catch ( WpsStop $e ) { return $e->getMessage(); }
+}
+$GLOBALS['wps_me'] = 20;
+$handlers = array( 'wpshare_handle_sitemap' => 'wpshare_sitemap', 'wpshare_handle_settings' => 'wpshare_settings', 'wpshare_handle_send' => 'wpshare_send' );
+
+// No capability: refused before the nonce is looked at, nothing changes.
+$_POST = array( 'owner' => array( 2 => '21' ), 'dates' => '01-01', 'fallback' => 'evil@example.edu' );
+$before = array( get_option( WPSHARE_OPTION ), $GLOBALS['wps_meta'], count( $GLOBALS['wps_mail'] ) );
+$GLOBALS['wps_can'] = false;
+$GLOBALS['wps_referer'] = array();
+foreach ( $handlers as $fn => $action ) { ok( 'die:403' === wps_run( $fn ), "$fn: no capability, 403" ); }
+ok( array() === $GLOBALS['wps_referer'], 'capability checked before the nonce' );
+ok( 'die:403' === wps_run( 'wpshare_page_sitemap' ) && 'die:403' === wps_run( 'wpshare_page_settings' ), 'admin screens refuse without capability' );
+ok( $before === array( get_option( WPSHARE_OPTION ), $GLOBALS['wps_meta'], count( $GLOBALS['wps_mail'] ) ), 'refused: nothing saved, no owner changed, no email' );
+
+// Capability but a bad nonce: stopped, nothing changes.
+$GLOBALS['wps_can'] = true;
+$GLOBALS['wps_nonce_ok'] = false;
+foreach ( $handlers as $fn => $action ) {
+	$GLOBALS['wps_referer'] = array();
+	ok( 'nonce' === wps_run( $fn ) && array( $action ) === $GLOBALS['wps_referer'], "$fn: checks the $action nonce" );
+}
+ok( $before === array( get_option( WPSHARE_OPTION ), $GLOBALS['wps_meta'], count( $GLOBALS['wps_mail'] ) ), 'bad nonce: nothing saved, no owner changed, no email' );
+$GLOBALS['wps_nonce_ok'] = true;
+
+// Allowed: each handler acts and redirects.
+$_POST = array( 'owner' => array( 2 => '21' ), 'reviewed' => '2', 'filter' => 'mine' );
+ok( 'redirect:https://example.test/wp-admin/admin.php?page=wpshare&filter=mine&msg=reviewed&n=1&rid=2#wpshare-page-2' === wps_run( 'wpshare_handle_sitemap' ), 'sitemap handler redirects back to the reviewed row' );
+ok( 21 === wpshare_owner( 2 ) && 20 === $GLOBALS['wps_meta'][2][ WPSHARE_REVIEWER_META ], 'sitemap handler saves the owner and the current user as reviewer' );
+$_POST = array( 'owner' => array( 2 => '21' ), 'filter' => array( 'x' ) );
+ok( 'redirect:https://example.test/wp-admin/admin.php?page=wpshare&filter=all&msg=saved&n=0' === wps_run( 'wpshare_handle_sitemap' ), 'sitemap handler: junk filter becomes all' );
+$_POST = array( 'post_types' => array( 'page' ), 'dates' => "01-15\n02-29 junk", 'fallback' => 'web@example.edu' );
+ok( 'redirect:https://example.test/wp-admin/admin.php?page=wpshare-settings&msg=saved&rejected=02-29%2C%20junk' === wps_run( 'wpshare_handle_settings' ), 'settings handler reports rejected dates' );
+ok( array( '01-15' ) === wpshare_settings()['dates'] && 'web@example.edu' === wpshare_settings()['fallback'], 'settings handler saves through sanitize' );
+$GLOBALS['wps_mail'] = array();
+$_POST = array();
+ok( 'redirect:https://example.test/wp-admin/admin.php?page=wpshare-settings&msg=sent&n=3' === wps_run( 'wpshare_handle_send' ) && 3 === count( $GLOBALS['wps_mail'] ), 'send handler sends and reports the count' );
+
+/* ---------------- owner names escaped ---------------- */
+
+usr( 23, '<b>Eve</b> & co', 'eve@example.edu' );
+$GLOBALS['wps_meta'][1][ WPSHARE_REVIEWED_META ] = '2026-10-01';
+$GLOBALS['wps_meta'][1][ WPSHARE_REVIEWER_META ] = 23;
+$h = wpshare_render_sitemap( wpshare_tree( wpshare_pages() ), wpshare_owner_choices(), 'all', 20 );
+ok( false === strpos( $h, '<b>Eve' ) && false !== strpos( $h, '>&lt;b&gt;Eve&lt;/b&gt; &amp; co</option>' ) && false !== strpos( $h, '2026-10-01 by &lt;b&gt;Eve&lt;/b&gt; &amp; co' ), 'owner and reviewer names escaped' );
 
 echo "\n$passes passed, $fails failed\n";
 exit( $fails ? 1 : 0 );
