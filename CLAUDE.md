@@ -11,7 +11,7 @@ in the theme (see below). Repo: https://github.com/tfscharff/wpshare (public, GP
 sibling plugins).
 
 The sibling plugins are `wphours`, `wprooms`, `wpmeet`, `wpfloors` and `wpa11y`, all in
-`C:\Users\thoma\Documents\`. Copy their conventions, especially `wpfloors\CLAUDE.md` (single-file
+`C:\Users\thoma\repos\`. Copy their conventions, especially `wpfloors\CLAUDE.md` (single-file
 plugin, stub test harness) and `wpa11y\bin\release.sh` (release script).
 
 Name everything `wpshare`: the file, the zip folder, the `wpshare_` PHP prefix, the option, any
