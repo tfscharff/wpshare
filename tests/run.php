@@ -16,8 +16,33 @@ $GLOBALS['wps_mail_ok'] = true;
 $GLOBALS['wps_today']   = '2026-10-28';
 $GLOBALS['wps_types']   = array( 'post' => 'Posts', 'page' => 'Pages', 'attachment' => 'Media', 'foyer_slide' => 'Slides' );
 
-function add_action() {}
-function add_filter() {}
+$GLOBALS['wps_hooks']   = array();  // hook => [[callback, priority, accepted args]]
+$GLOBALS['wps_can']     = true;     // current_user_can() answer
+$GLOBALS['wps_nonce_ok'] = true;    // check_admin_referer() answer
+$GLOBALS['wps_referer'] = array();  // nonce actions checked
+$GLOBALS['wps_me']      = 0;        // get_current_user_id()
+
+// wp_die(), a failed nonce and wp_safe_redirect() all end the request in WordPress; here they
+// throw, so a handler stops where it would have exited.
+class WpsStop extends Exception {}
+
+function add_action( $hook, $cb, $prio = 10, $args = 1 ) { $GLOBALS['wps_hooks'][ $hook ][] = array( $cb, $prio, $args ); }
+function add_filter( $hook, $cb, $prio = 10, $args = 1 ) { $GLOBALS['wps_hooks'][ $hook ][] = array( $cb, $prio, $args ); }
+function current_user_can( $cap ) { return $GLOBALS['wps_can'] && 'edit_pages' === $cap; }
+function check_admin_referer( $action ) {
+	$GLOBALS['wps_referer'][] = $action;
+	if ( ! $GLOBALS['wps_nonce_ok'] ) { throw new WpsStop( 'nonce' ); }
+	return 1;
+}
+function wp_die( $msg = '', $code = 500 ) { throw new WpsStop( 'die:' . $code ); }
+function wp_safe_redirect( $url ) { throw new WpsStop( 'redirect:' . $url ); }
+function add_query_arg( $args, $url ) {
+	$q = array();
+	foreach ( $args as $k => $v ) { $q[] = $k . '=' . $v; }
+	return $url . ( false === strpos( $url, '?' ) ? '?' : '&' ) . implode( '&', $q );
+}
+function get_current_user_id() { return $GLOBALS['wps_me']; }
+function wp_unslash( $v ) { return is_array( $v ) ? array_map( 'wp_unslash', $v ) : ( is_string( $v ) ? stripslashes( $v ) : $v ); }
 function add_menu_page() {}
 function add_submenu_page() {}
 function register_deactivation_hook() {}
